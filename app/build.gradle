@@ -1,29 +1,37 @@
-apply plugin: 'com.android.application'
-
-apply plugin: 'kotlin-android'
-
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+}
 
 android {
-    compileSdkVersion 28
+    namespace "com.wuliang.xapkinstaller"
+
+    compileSdk 35
+
     defaultConfig {
         applicationId "com.wuliang.xapkinstaller"
-        minSdkVersion 14
-        targetSdkVersion 28
+        minSdk 21
+        targetSdk 35
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
-    buildToolsVersion = '28.0.3'
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
 }
 
 dependencies {
@@ -31,9 +39,7 @@ dependencies {
 
     implementation "androidx.appcompat:appcompat:$rootProject.ext.appcompat_version"
 
-    implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    testImplementation 'junit:junit:4.12'
-    implementation project(path: ':lib')
+    testImplementation 'junit:junit:4.13.2'
 
-    implementation "com.liulishuo.okdownload:okdownload:1.0.7"
+    implementation project(path: ':lib')
 }

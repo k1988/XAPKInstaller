@@ -1,16 +1,19 @@
-apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'maven-publish'
+plugins {
+    id 'com.android.library'
+    id 'kotlin-android'
+    id 'maven-publish'
+}
 
 group = 'com.wuliang.lib'
 version = '1.0.0'
 
 android {
-    compileSdkVersion 28
+    namespace "com.wuliang.lib"
+    compileSdk 35
 
     defaultConfig {
-        minSdkVersion 14
-        targetSdkVersion 28
+        minSdk 21
+        targetSdk 35
         versionCode 1
         versionName "1.0"
 
@@ -26,10 +29,12 @@ android {
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
-    buildToolsVersion = '28.0.3'
 
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
 }
 
 dependencies {
@@ -37,23 +42,16 @@ dependencies {
 
     implementation "androidx.appcompat:appcompat:$rootProject.ext.appcompat_version"
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.13.2'
 
     implementation 'org.zeroturnaround:zt-zip:1.13'
 }
 
-// Because the components are created only during the afterEvaluate phase, you must
-// configure your publications using the afterEvaluate() lifecycle method.
 afterEvaluate {
     publishing {
         publications {
-            // Creates a Maven publication called "release".
             release(MavenPublication) {
-                // Applies the component for the release build variant.
                 from components.release
-
-                // You can then customize attributes of the publication as shown below.
                 artifactId = 'xapkinstaller'
             }
         }

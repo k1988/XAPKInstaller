@@ -124,7 +124,8 @@ public class InstallActivity extends AppCompatActivity {
         // Create an install status receiver.
         Intent intent = new Intent(this, InstallActivity.class);
         intent.setAction(PACKAGE_INSTALLED_ACTION);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0;
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
         IntentSender statusReceiver = pendingIntent.getIntentSender();
 
         // Commit the session (this will start the installation workflow).

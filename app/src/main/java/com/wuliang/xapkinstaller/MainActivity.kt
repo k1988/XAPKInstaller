@@ -14,13 +14,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import com.liulishuo.okdownload.DownloadListener
-import com.liulishuo.okdownload.DownloadTask
-import com.liulishuo.okdownload.core.cause.EndCause
-import com.liulishuo.okdownload.core.cause.ResumeFailedCause
-import com.liulishuo.okdownload.core.listener.DownloadListener1
-import com.liulishuo.okdownload.core.listener.DownloadListener2
-import com.liulishuo.okdownload.core.listener.assist.Listener1Assist
 import com.wuliang.lib.createXapkInstaller
 import java.io.File
 import java.lang.Exception
@@ -126,58 +119,9 @@ class MainActivity : AppCompatActivity() {
 
         if (outputFile.exists()) {
             doInstall(outputFile.absolutePath)
+        } else {
+            Toast.makeText(this, "请先手动下载XAPK文件到Downloads/xapk目录", Toast.LENGTH_LONG).show()
         }
-
-        //TODO this is xapk download url
-        val downloadUrl = ""
-
-        val task = DownloadTask.Builder(
-            downloadUrl,
-            outputFileDirectory
-        )
-            .setFilename(outputFileName)
-            .build()
-
-        val dialog = ProgressDialog(this)
-        dialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
-        dialog.isIndeterminate = false
-        dialog.setCancelable(false)
-        dialog.max = 100
-        dialog.setTitle("正在下载中...")
-
-        task.enqueue(object : DownloadListener1() {
-            override fun taskStart(task: DownloadTask, model: Listener1Assist.Listener1Model) {
-                dialog.show()
-            }
-
-            override fun progress(task: DownloadTask, currentOffset: Long, totalLength: Long) {
-                dialog.progress = ((currentOffset / totalLength) * dialog.max).toInt()
-            }
-
-            override fun taskEnd(
-                task: DownloadTask,
-                cause: EndCause,
-                realCause: Exception?,
-                model: Listener1Assist.Listener1Model
-            ) {
-                dialog.dismiss()
-                Toast.makeText(this@MainActivity, "下载完成，开始安装！", Toast.LENGTH_SHORT).show();
-
-                doInstall(outputFile.absolutePath)
-            }
-
-            override fun retry(task: DownloadTask, cause: ResumeFailedCause) {
-            }
-
-            override fun connected(
-                task: DownloadTask,
-                blockCount: Int,
-                currentOffset: Long,
-                totalLength: Long
-            ) {
-            }
-
-        })
     }
 
     private fun doInstall(xapkFilePath: String) {

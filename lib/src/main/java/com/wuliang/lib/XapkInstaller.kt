@@ -1,8 +1,7 @@
 package com.wuliang.lib
 
 import android.content.Context
-import org.zeroturnaround.zip.ZipException
-import java.io.File
+import android.net.Uri
 
 /**
  * <pre>
@@ -10,14 +9,8 @@ import java.io.File
  *     time   : 2019/09/27
  * </pre>
  */
-abstract class XapkInstaller(val xapkPath: String, val xapkUnzipOutputDir: File) {
+abstract class XapkInstaller {
 
-    fun installXapk(context: Context) {
-        install(xapkPath,context)
-    }
-
-    internal abstract fun install(xapkPath: String,context: Context)
-
-    abstract fun getUnzipPath():String?
+    abstract fun installXapk(uri: Uri, context: Context)
 
 }

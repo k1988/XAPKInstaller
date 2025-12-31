@@ -3,42 +3,85 @@ package com.wuliang.lib
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
+import org.apache.commons.compress.archivers.zip.ZipFile
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.Locale
 
-/**
- * <pre>
- *     author : wuliang
- *     time   : 2019/09/27
- * </pre>
- */
-class MultiApkXapkInstaller(xapkPath: String, xapkUnzipOutputDir: File)
-    : XapkInstaller(xapkPath, xapkUnzipOutputDir) {
+class MultiApkXapkInstaller : XapkInstaller() {
 
-    override fun getUnzipPath(): String? {
-        return xapkUnzipOutputDir.absolutePath
+    override fun installXapk(uri: Uri, context: Context) {
+        val unzipDir = File(
+            context.cacheDir,
+            "xapk_install_${System.currentTimeMillis()}"
+        )
+        unzipDir.mkdirs()
+
+        val apkFilePaths = ArrayList<String>()
+
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                FileInputStream(pfd.fileDescriptor).channel.use { channel ->
+                    ZipFile(channel).use { zip ->
+                        val entries = zip.entries
+                        while (entries.hasMoreElements()) {
+                            val entry = entries.nextElement()
+                            if (entry.isDirectory) continue
+
+                            val name = entry.name
+                            if (!name.lowercase(Locale.US).endsWith(".apk")) {
+                                continue
+                            }
+
+                            val outFile = File(unzipDir, File(name).name)
+                            zip.getInputStream(entry).use { zis ->
+                                FileOutputStream(outFile).use { fos ->
+                                    zis.copyTo(fos)
+                                }
+                            }
+
+                            apkFilePaths.add(outFile.absolutePath)
+                        }
+                    }
+                }
+            } ?: throw IllegalStateException("Unable to open ParcelFileDescriptor: $uri")
+
+            if (apkFilePaths.isEmpty()) {
+                Log.e(INSTALL_OPEN_APK_TAG, "No APK files found in XAPK: $uri")
+                unzipDir.deleteRecursively()
+                return
+            }
+
+            enterInstallActivity(uri.toString(), apkFilePaths, context)
+
+        } catch (e: Exception) {
+            Log.e(INSTALL_OPEN_APK_TAG, "Install XAPK failed: $uri", e)
+            unzipDir.deleteRecursively()
+        }
     }
 
-    override fun install(xapkPath: String, context: Context) {
-        val files = xapkUnzipOutputDir.listFiles()
-
-        val apkFilePaths = files.filter { file ->
-            file.isFile && file.name.endsWith(".apk")
-        }.map { it.absolutePath }
-
-        enterInstallActivity(xapkPath, ArrayList(apkFilePaths), context)
-    }
-
-    private fun enterInstallActivity(xapkPath: String, apkFilePaths: ArrayList<String>, context: Context) {
-        Log.d(INSTALL_OPEN_APK_TAG, "multi apk xapk installer,enter InstallActivity,xapkPath:$xapkPath," +
-                "apkFilePaths:$apkFilePaths")
+    private fun enterInstallActivity(
+        xapkPath: String,
+        apkFilePaths: ArrayList<String>,
+        context: Context
+    ) {
+        Log.d(
+            INSTALL_OPEN_APK_TAG,
+            "multi apk installer, apkFilePaths=$apkFilePaths"
+        )
 
         val intent = Intent(context, InstallActivity::class.java)
-        intent.putStringArrayListExtra(InstallActivity.KEY_APK_PATHS, apkFilePaths)
+        intent.putStringArrayListExtra(
+            InstallActivity.KEY_APK_PATHS,
+            apkFilePaths
+        )
         if (context !is Activity) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
     }
-
 }

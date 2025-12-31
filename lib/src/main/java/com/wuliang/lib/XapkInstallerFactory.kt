@@ -1,114 +1,88 @@
 package com.wuliang.lib
 
-import android.os.Environment
+import android.content.Context
+import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
-import org.zeroturnaround.zip.NameMapper
-import org.zeroturnaround.zip.ZipException
-import org.zeroturnaround.zip.ZipUtil
-import java.io.File
+import org.apache.commons.compress.archivers.zip.ZipFile
+import java.io.FileInputStream
+import java.nio.channels.FileChannel
+import java.util.Locale
 
-/**
- * <pre>
- *     author : wuliang
- *     time   : 2019/09/27
- * </pre>
- */
+const val INSTALL_OPEN_APK_TAG = "install_open_apk_tag"
 
-internal const val INSTALL_OPEN_APK_TAG = "install_open_apk_tag"
+fun createXapkInstaller(uri: Uri, context: Context): XapkInstaller? {
+    val resolver = context.contentResolver
 
-fun createXapkInstaller(xapkFilePath: String?): XapkInstaller? {
-    if (xapkFilePath.isNullOrEmpty()) {
-        return null
-    }
-
-    val xapkFile = File(xapkFilePath)
-
-    val unzipOutputDirPath = createUnzipOutputDir(xapkFile)
-    if (unzipOutputDirPath.isNullOrEmpty()) {
-        return null
-    }
-
-    val unzipOutputDir = File(unzipOutputDirPath)
-    try {
-        //只保留apk文件和Android/obb下的文件,以及json文件用于获取主包（当有多个apk时）
-        ZipUtil.unpack(xapkFile, unzipOutputDir, NameMapper { name ->
-            when {
-                name.endsWith(".apk") -> return@NameMapper name
-                else -> return@NameMapper null
-            }
-        })
-    } catch (e: ZipException) {
-        e.printStackTrace()
-        return null
-    }
-
-    val files = unzipOutputDir.listFiles()
-    val apkSize = files.count { file ->
-        file.isFile && file.name.endsWith(".apk")
-    }
-
-    if (!unzipObbToAndroidObbDir(xapkFile, File(getMobileAndroidObbDir()))) {
-        return null
-    }
-
-    return if (apkSize > 1) {
-        MultiApkXapkInstaller(xapkFilePath, unzipOutputDir)
-    } else {
-        SingleApkXapkInstaller(xapkFilePath, unzipOutputDir)
-    }
-}
-
-private fun createUnzipOutputDir(file: File): String? {
-    val filePathPex = file.parent + File.separator
-    val unzipOutputDir = filePathPex + getFileNameNoExtension(file)
-    val result = createOrExistsDir(unzipOutputDir)
-
-    return if (result)
-        unzipOutputDir
-    else
-        null
-}
-
-private fun unzipObbToAndroidObbDir(xapkFile: File, unzipOutputDir: File): Boolean {
-    val prefix = "Android/obb"
+    var apkCount = 0
+    var hasSplitApk = false
+    var hasManifest = false
 
     try {
-        //只保留apk文件和Android/obb下的文件,以及json文件用于获取主包（当有多个apk时）
-        ZipUtil.unpack(xapkFile, unzipOutputDir, NameMapper { name ->
-            when {
-                name.startsWith(prefix) -> return@NameMapper name.substring(prefix.length)
-                else -> return@NameMapper null
+        resolver.openFileDescriptor(uri, "r")?.use { pfd ->
+            FileInputStream(pfd.fileDescriptor).channel.use { channel ->
+                // 尝试一次 seek，用于快速失败
+                try {
+                    val pos = channel.position()
+                    channel.position(pos)
+                } catch (e: Exception) {
+                    Log.e(
+                        INSTALL_OPEN_APK_TAG,
+                        "FileDescriptor does not support seek: $uri",
+                        e
+                    )
+                    return null
+                }
+
+                ZipFile(channel).use { zip ->
+                    val entries = zip.entries
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        if (entry.isDirectory) continue
+
+                        val name = entry.name.lowercase(Locale.US)
+
+                        // manifest.json（允许在任意目录）
+                        if (!hasManifest &&
+                            (name == "manifest.json" || name.endsWith("/manifest.json"))
+                        ) {
+                            hasManifest = true
+                        }
+
+                        // APK 判断
+                        if (name.endsWith(".apk")) {
+                            apkCount++
+                            if (name.contains("split_") || name.contains("split_config")) {
+                                hasSplitApk = true
+                            }
+                        }
+                    }
+                }
             }
-        })
-
-        Log.d(INSTALL_OPEN_APK_TAG, "unzip obb to Android/obb succeed")
-        return true
-    } catch (e: ZipException) {
-        e.printStackTrace()
-        return false
+        } ?: run {
+            Log.e(INSTALL_OPEN_APK_TAG, "Unable to open ParcelFileDescriptor: $uri")
+            return null
+        }
+    } catch (e: Exception) {
+        Log.e(
+            INSTALL_OPEN_APK_TAG,
+            "Failed to parse XAPK using ParcelFileDescriptor",
+            e
+        )
+        return null
     }
-}
 
-/**
- * 得到手机的Android/obb目录
- *
- * @return
- */
-fun getMobileAndroidObbDir(): String {
-    val path: String = if (isSDCardEnableByEnvironment()) {
-        Environment.getExternalStorageDirectory().path + File.separator + "Android" + File.separator + "obb"
-    } else {
-        Environment.getDataDirectory().parentFile.toString() + File.separator + "Android" + File.separator + "obb"
+    if (apkCount == 0) {
+        Log.e(INSTALL_OPEN_APK_TAG, "No APK found in archive: $uri")
+        return null
     }
-    createOrExistsDir(path)
-    return path
-}
 
-/**
- * Return whether sdcard is enabled by environment.
- *
- * @return `true`: enabled<br></br>`false`: disabled
- */
-fun isSDCardEnableByEnvironment(): Boolean {
-    return Environment.MEDIA_MOUNTED == Environment.getExternalStorageState()
+    return when {
+        hasSplitApk || apkCount > 1 -> {
+            MultiApkXapkInstaller()
+        }
+        else -> {
+            SingleApkXapkInstaller()
+        }
+    }
 }

@@ -7,14 +7,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.provider.Settings
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.wuliang.lib.createXapkInstaller
-import java.io.File
 import java.util.concurrent.Executors
 
 private const val PERMISSION_REQUEST_CODE = 99
@@ -33,23 +31,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAndInstall() {
-        if (Build.VERSION.SDK_INT >= 26) {//8.0
-            //来判断应用是否有权限安装apk
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val installAllowed = packageManager.canRequestPackageInstalls()
-            //有权限
             if (installAllowed) {
-                //安装apk
                 install()
             } else {
-                //无权限 申请权限
+                // 无权限，申请权限
                 ActivityCompat.requestPermissions(
                     this,
                     arrayOf(Manifest.permission.REQUEST_INSTALL_PACKAGES),
                     PERMISSION_REQUEST_CODE
                 )
             }
-        } else {//8.0以下
-            //安装apk
+        } else {
             install()
         }
     }
@@ -61,19 +55,14 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode != PERMISSION_REQUEST_CODE)
-            return
+        if (requestCode != PERMISSION_REQUEST_CODE) return
 
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             install()
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                //引导用户去手动开启权限
                 val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                startActivityForResult(
-                    intent,
-                    ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE
-                )
+                startActivityForResult(intent, ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE)
             } else {
                 Toast.makeText(this, "权限不足！", Toast.LENGTH_SHORT).show()
             }
@@ -86,7 +75,7 @@ class MainActivity : AppCompatActivity() {
 
         when (requestCode) {
             ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE -> {
-                if (packageManager.canRequestPackageInstalls()) {
+                if (resultCode == RESULT_OK) {
                     install()
                 } else {
                     Toast.makeText(this, "权限不足！", Toast.LENGTH_SHORT).show()
@@ -95,12 +84,7 @@ class MainActivity : AppCompatActivity() {
             FILE_PICKER_REQUEST_CODE -> {
                 if (resultCode == RESULT_OK) {
                     data?.data?.also { uri ->
-                        val file = getFileFromUri(uri)
-                        if (file != null && file.name.endsWith(".xapk", true)) {
-                            doInstall(file.absolutePath)
-                        } else {
-                            Toast.makeText(this, "获取文件失败或文件不是XAPK", Toast.LENGTH_SHORT).show()
-                        }
+                        doInstall(uri)
                     }
                 }
             }
@@ -113,7 +97,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectXapkAndInstall() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*"
+            type = "*/*" // 允所有文件类型，可以更具体地指定为 "application/vnd.android.package-archive" 或自定义mime类型
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         try {
@@ -126,42 +110,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("Range")
-    private fun getFileFromUri(uri: Uri): File? {
-        var fileName = "temp.xapk"
-        val cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1) {
-                    fileName = it.getString(nameIndex)
-                }
-            }
-        }
-
-        val destinationFilename = File(cacheDir, fileName)
-        try {
-            contentResolver.openInputStream(uri)?.use { ins ->
-                destinationFilename.outputStream().use { outs ->
-                    ins.copyTo(outs)
-                }
-            }
-        } catch (ex: Exception) {
-            ex.printStackTrace()
-            return null
-        }
-        return destinationFilename
-    }
-
-    private fun doInstall(xapkFilePath: String) {
-        val xapkInstaller = createXapkInstaller(xapkFilePath)
+    private fun doInstall(uri: Uri) {
+        val xapkInstaller = createXapkInstaller(uri, this)
 
         if (xapkInstaller == null) {
-            Toast.makeText(this, "安装xapk失败！", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "创建XAPK安装程序失败！", Toast.LENGTH_SHORT).show()
         } else {
             val installExecutor = Executors.newSingleThreadExecutor()
             installExecutor.execute {
-                xapkInstaller.installXapk(this@MainActivity)
+                xapkInstaller.installXapk(uri, this@MainActivity)
             }
         }
     }

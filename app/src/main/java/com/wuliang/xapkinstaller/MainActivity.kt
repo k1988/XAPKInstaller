@@ -7,11 +7,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.wuliang.lib.PermissionPageUtil
 import com.wuliang.lib.createXapkInstaller
 import java.util.concurrent.Executors
 
@@ -31,12 +34,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAndInstall() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                checkInstallPermissionAndInstall()
+            } else {
+                Toast.makeText(this, "需要管理所有文件的权限", Toast.LENGTH_SHORT).show()
+                PermissionPageUtil.openPermissionActivity(this)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            val readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+
+            if (writePermission != PackageManager.PERMISSION_GRANTED || readPermission != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE),
+                    PERMISSION_REQUEST_CODE
+                )
+            } else {
+                checkInstallPermissionAndInstall()
+            }
+        } else {
+            checkInstallPermissionAndInstall()
+        }
+    }
+
+    private fun checkInstallPermissionAndInstall() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val installAllowed = packageManager.canRequestPackageInstalls()
             if (installAllowed) {
                 install()
             } else {
-                // 无权限，申请权限
                 ActivityCompat.requestPermissions(
                     this,
                     arrayOf(Manifest.permission.REQUEST_INSTALL_PACKAGES),
@@ -58,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         if (requestCode != PERMISSION_REQUEST_CODE) return
 
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            install()
+            checkInstallPermissionAndInstall()
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
@@ -97,7 +125,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectXapkAndInstall() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*" // 允所有文件类型，可以更具体地指定为 "application/vnd.android.package-archive" 或自定义mime类型
+            type = "*/*"
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         try {

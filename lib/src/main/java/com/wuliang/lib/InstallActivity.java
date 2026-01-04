@@ -76,6 +76,12 @@ public class InstallActivity extends AppCompatActivity {
         installXapkExectuor = Executors.newSingleThreadExecutor();
         installXapkExectuor.execute(() -> {
             try {
+                if (apkPaths == null || apkPaths.isEmpty()) {
+                    Toast.makeText(this, "解析apk出错或已取消", Toast.LENGTH_SHORT).show();
+                    finish();
+                    return;
+                }
+
                 mSession = initSession();
 
                 for (String apkPath : apkPaths) {

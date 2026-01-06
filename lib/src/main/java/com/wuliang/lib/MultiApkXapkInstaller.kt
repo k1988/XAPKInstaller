@@ -38,8 +38,8 @@ class MultiApkXapkInstaller : XapkInstaller() {
                             }
 
                             val outFile = File(unzipDir, File(name).name)
-                            zip.getInputStream(entry).use { zis ->
-                                FileOutputStream(outFile).use { fos ->
+                            zip.getInputStream(entry).buffered().use { zis ->
+                                FileOutputStream(outFile).buffered().use { fos ->
                                     zis.copyTo(fos)
                                 }
                             }

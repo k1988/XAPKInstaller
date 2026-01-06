@@ -14,6 +14,28 @@ const val INSTALL_OPEN_APK_TAG = "install_open_apk_tag"
 fun createXapkInstaller(uri: Uri, context: Context): XapkInstaller? {
     val resolver = context.contentResolver
 
+    val fileName = getFileName(uri, context)
+    val fileExtension = fileName?.substringAfterLast('.', "")?.lowercase()
+
+    Log.d(INSTALL_OPEN_APK_TAG, "文件名: $fileName, 扩展名: $fileExtension")
+
+    when (fileExtension) {
+        "apk" -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "检测到普通APK文件，使用SimpleApkInstaller")
+            return SimpleApkInstaller()
+        }
+        "aab" -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "检测到AAB文件，暂不支持")
+            throw IllegalStateException("暂不支持AAB格式，请使用APK或XAPK格式")
+        }
+        "xapk", "apks", "apkm", "zip" -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "检测到压缩包格式，开始解析内容...")
+        }
+        else -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "未知文件格式: $fileExtension，尝试作为压缩包解析...")
+        }
+    }
+
     var apkCount = 0
     var hasSplitApk = false
     var hasManifest = false
@@ -74,15 +96,33 @@ fun createXapkInstaller(uri: Uri, context: Context): XapkInstaller? {
 
     if (apkCount == 0) {
         Log.e(INSTALL_OPEN_APK_TAG, "No APK found in archive: $uri")
-        return null
+        throw IllegalStateException("在文件中未找到APK文件")
     }
 
     return when {
         hasSplitApk || apkCount > 1 -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "检测到多个APK或Split APK，使用MultiApkXapkInstaller")
             MultiApkXapkInstaller()
         }
         else -> {
+            Log.d(INSTALL_OPEN_APK_TAG, "检测到单个APK，使用SingleApkXapkInstaller")
             SingleApkXapkInstaller()
         }
     }
+}
+
+private fun getFileName(uri: Uri, context: Context): String? {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null, null)
+        cursor?.use {
+            val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (it.moveToFirst()) {
+                result = it.getString(index)
+            }
+        }
+    } else if (uri.scheme == "file") {
+        result = uri.lastPathSegment
+    }
+    return result
 }

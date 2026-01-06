@@ -60,17 +60,20 @@ public class InstallActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT < 21) {
             Toast.makeText(this, "暂时不支持安装,请更新到Android 5.0及以上版本", Toast.LENGTH_SHORT).show();
             finish();
+            return;
         }
 
         if (apkPaths == null || apkPaths.isEmpty()) {
             Toast.makeText(this, "解析apk出错或已取消", Toast.LENGTH_SHORT).show();
             finish();
+            return;
         }
 
         if (RomUtils.isMeizu() || RomUtils.isVivo()) {
             Toast.makeText(this,"魅族或VIVO系统用户如遇安装被中止或者安装失败的情况，请尝试联系手机平台客服，或者更换系统内置包安装器再重试",
                     Toast.LENGTH_SHORT).show();
             finish();
+            return;
         }
 
         installXapkExectuor = Executors.newSingleThreadExecutor();
@@ -105,7 +108,13 @@ public class InstallActivity extends AppCompatActivity {
 
         int sessionId;
         sessionId = packageInstaller.createSession(params);
+        if (sessionId == -1) {
+            throw new IOException("Failed to create package installer session");
+        }
         session = packageInstaller.openSession(sessionId);
+        if (session == null) {
+            throw new IOException("Failed to open package installer session");
+        }
 
         return session;
     }
@@ -130,7 +139,9 @@ public class InstallActivity extends AppCompatActivity {
         // Create an install status receiver.
         Intent intent = new Intent(this, InstallActivity.class);
         intent.setAction(PACKAGE_INSTALLED_ACTION);
-        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0;
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ?
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT :
+            PendingIntent.FLAG_UPDATE_CURRENT;
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
         IntentSender statusReceiver = pendingIntent.getIntentSender();
 
@@ -150,21 +161,45 @@ public class InstallActivity extends AppCompatActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        Log.d(TAG, "onNewIntent called, action: " + intent.getAction());
+        Log.d(TAG, "intent data: " + intent.getData());
+        Log.d(TAG, "intent categories: " + intent.getCategories());
+
         Bundle extras = intent.getExtras();
+        if (extras != null) {
+            Log.d(TAG, "extras keys: " + extras.keySet());
+            for (String key : extras.keySet()) {
+                Object value = extras.get(key);
+                Log.d(TAG, "extra[" + key + "] = " + value + " (type: " + (value != null ? value.getClass().getSimpleName() : "null") + ")");
+            }
+        } else {
+            Log.d(TAG, "extras: null");
+        }
+
         if (PACKAGE_INSTALLED_ACTION.equals(intent.getAction())) {
             int status = -100;
             String message = "";
+
             if (extras != null) {
-                status = extras.getInt(PackageInstaller.EXTRA_STATUS);
+                status = extras.getInt(PackageInstaller.EXTRA_STATUS, -100);
                 message = extras.getString(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                Log.d(TAG, "PackageInstaller status: " + status + ", message: " + message);
             }
+
             switch (status) {
                 case PackageInstaller.STATUS_PENDING_USER_ACTION:
-                    // This test app isn't privileged, so the user has to confirm the install.
+                    Log.d(TAG, "STATUS_PENDING_USER_ACTION");
                     Intent confirmIntent = (Intent) extras.get(Intent.EXTRA_INTENT);
-                    startActivity(confirmIntent);
+                    if (confirmIntent != null) {
+                        startActivity(confirmIntent);
+                    } else {
+                        Log.e(TAG, "Confirm intent is null");
+                        Toast.makeText(this, "安装确认界面启动失败", Toast.LENGTH_LONG).show();
+                        finish();
+                    }
                     break;
                 case PackageInstaller.STATUS_SUCCESS:
+                    Log.d(TAG, "STATUS_SUCCESS");
                     Toast.makeText(this, "安装成功!", Toast.LENGTH_SHORT).show();
                     finish();
                     break;
@@ -175,17 +210,19 @@ public class InstallActivity extends AppCompatActivity {
                 case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE:
                 case PackageInstaller.STATUS_FAILURE_INVALID:
                 case PackageInstaller.STATUS_FAILURE_STORAGE:
-                    Toast.makeText(this, "安装失败,请重试",
-                            Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "STATUS_FAILURE: " + status + ", message: " + message);
+                    Toast.makeText(this, "安装失败: " + (message != null ? message : "未知错误"),
+                            Toast.LENGTH_LONG).show();
                     finish();
-                    Log.d(TAG, "Install failed! " + status + ", " + message);
                     break;
                 default:
-                    Toast.makeText(this, "安装失败,解压文件可能已丢失或损坏，请重试",
-                            Toast.LENGTH_SHORT).show();
+                    Log.e(TAG, "Unrecognized status received from installer: " + status);
+                    Toast.makeText(this, "安装失败，状态码: " + status,
+                            Toast.LENGTH_LONG).show();
                     finish();
-                    Log.d(TAG, "Unrecognized status received from installer: " + status);
             }
+        } else {
+            Log.d(TAG, "Intent action does not match PACKAGE_INSTALLED_ACTION");
         }
     }
 

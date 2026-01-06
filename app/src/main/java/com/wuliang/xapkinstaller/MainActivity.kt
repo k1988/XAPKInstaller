@@ -35,27 +35,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAndInstall() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) {
-                checkInstallPermissionAndInstall()
-            } else {
-                Toast.makeText(this, "需要管理所有文件的权限", Toast.LENGTH_SHORT).show()
-                PermissionPageUtil.openPermissionActivity(this)
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            val readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-
-            if (writePermission != PackageManager.PERMISSION_GRANTED || readPermission != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE),
-                    PERMISSION_REQUEST_CODE
-                )
-            } else {
-                checkInstallPermissionAndInstall()
-            }
-        } else {
+        if (PermissionPageUtil.checkStoragePermission(this, PERMISSION_REQUEST_CODE))
+        {
             checkInstallPermissionAndInstall()
         }
     }

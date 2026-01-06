@@ -6,12 +6,27 @@ XAPK Installer 是一个用于安装 Android 应用安装包的工具，支持 A
 
 ## 支持的文件格式
 
-| 格式 | 说明 | 支持状态 |
-|------|------|----------|
-| APK | 标准的 Android 应用安装包 | ✅ 完全支持 |
-| XAPK | Google Play 使用的扩展安装包，包含多个 APK 和 OBB 资源 | ✅ 完全支持 |
-| APKS | Google Play Bundle 下载格式 | ✅ 完全支持（作为 XAPK 处理） |
-| AAB | Android App Bundle 开发格式 | ❌ 不直接支持（需转换为 APK） |
+
+## 现在支持的格式：
+
+| 格式 | 安装器 | 说明 |
+|------|--------|------|
+| **.apk** | SimpleApkInstaller | 普通APK文件 |
+| **.xapk** | SingleApkXapkInstaller | 单个APK + OBB文件 |
+| **.apks** | MultiApkXapkInstaller | 多个Split APK |
+| **.apkm** | SingleApkXapkInstaller | APKMirror格式 |
+| **.zip** | Single/MultiApkXapkInstaller | 包含APK的ZIP文件 |
+| **.aab** | 不支持 | Android App Bundle（需要特殊处理） |
+
+## 工作流程：
+
+1. 用户选择文件
+2. 工厂类检测文件扩展名
+3. 根据格式选择合适的安装器：
+   - `.apk` → 直接使用 SimpleApkInstaller
+   - `.xapk/.apks/.apkm/.zip` → 解析内容，判断是单个还是多个APK
+   - `.aab` → 提示用户暂不支持
+4. 使用对应的安装器进行安装
 
 ## 项目结构
 
@@ -195,7 +210,7 @@ MultiApkXapkInstaller.install()
 protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_install);
-    
+
     initData();        // 获取 APK 路径列表
     installXapk();     // 开始安装
 }
@@ -253,8 +268,8 @@ Intent intent = new Intent(this, InstallActivity.class);
 intent.setAction(PACKAGE_INSTALLED_ACTION);
 
 // Android 12+ 需要指定 PendingIntent 的 mutability
-int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S 
-    ? PendingIntent.FLAG_IMMUTABLE 
+int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    ? PendingIntent.FLAG_IMMUTABLE
     : 0;
 PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
 
@@ -410,8 +425,8 @@ if (RomUtils.isMeizu() || RomUtils.isVivo()) {
 
 **实现：**
 ```java
-int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S 
-    ? PendingIntent.FLAG_IMMUTABLE 
+int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    ? PendingIntent.FLAG_IMMUTABLE
     : 0;
 PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
 ```
@@ -462,7 +477,7 @@ xapkInstaller?.installXapk(this)
 ```kotlin
 private fun doInstall(xapkFilePath: String) {
     val xapkInstaller = createXapkInstaller(xapkFilePath)
-    
+
     if (xapkInstaller == null) {
         Toast.makeText(this, "安装xapk失败！", Toast.LENGTH_SHORT).show()
     } else {
